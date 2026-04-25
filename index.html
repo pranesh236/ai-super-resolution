@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Super Resolution</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #7c6fff;
+    --accent2: #ff6f91;
+    --text: #eeeef5;
+    --muted: #7070a0;
+    --success: #4fffb0;
+    --font: 'Syne', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    margin-bottom: 48px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    margin-bottom: 16px;
+    letter-spacing: 0.1em;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+  /* controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .ctrl-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ctrl-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237070a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* drop zone */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    padding: 60px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: #14142a;
+  }
+
+  .dropzone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 24px;
+  }
+
+  .drop-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .drop-sub {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .preview-img {
+    max-height: 220px;
+    max-width: 100%;
+    border-radius: 10px;
+    margin: 0 auto;
+    display: block;
+  }
+
+  .file-name {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  /* generate button */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    color: #fff;
+    font-family: var(--font);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: opacity 0.2s, transform 0.15s;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .btn:hover { opacity: 0.9; }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* spinner */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  /* status */
+  .status {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    text-align: center;
+    min-height: 18px;
+    color: var(--muted);
+  }
+  .status.error { color: var(--accent2); }
+  .status.ok { color: var(--success); }
+
+  /* results */
+  .results {
+    display: none;
+    margin-top: 48px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .results-title {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .size-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--success);
+    background: rgba(79,255,176,0.08);
+    border: 1px solid rgba(79,255,176,0.2);
+    border-radius: 999px;
+    padding: 4px 12px;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .panel-label {
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-label .badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .badge-orig { background: rgba(112,112,160,0.2); color: var(--muted); }
+  .badge-bicubic { background: rgba(124,111,255,0.15); color: var(--accent); }
+  .badge-ai { background: rgba(79,255,176,0.12); color: var(--success); }
+
+  .panel img {
+    width: 100%;
+    display: block;
+  }
+
+  .dl-btn {
+    display: block;
+    width: calc(100% - 28px);
+    margin: 12px 14px;
+    padding: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-align: center;
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .dl-btn:hover { border-color: var(--accent); background: #1a1a30; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="tag">AI · Computer Vision · OpenCV</div>
+    <h1>Super<br><span>Resolution</span></h1>
+    <p class="subtitle">Drop an image. Get an AI-enhanced version in seconds.</p>
+  </header>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="ctrl-label">Model</span>
+      <select id="modelSelect">
+        <option value="fsrcnn">FSRCNN — fast</option>
+        <option value="edsr">EDSR — best quality</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Scale</span>
+      <select id="scaleSelect">
+        <option value="2">2×</option>
+        <option value="4" selected>4×</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/jpg">
+    <div id="dropContent">
+      <div class="drop-icon">🖼</div>
+      <p class="drop-title">Drop your image here</p>
+      <p class="drop-sub">or click to browse — JPG, PNG supported</p>
+    </div>
+  </div>
+
+  <button class="btn" id="generateBtn" disabled>
+    <div class="spinner" id="spinner"></div>
+    <span id="btnText">Select an image first</span>
+  </button>
+
+  <div class="status" id="status"></div>
+
+  <div class="results" id="results">
+    <div class="results-header">
+      <span class="results-title">Results</span>
+      <span class="size-tag" id="sizeTag"></span>
+    </div>
+    <div class="panels">
+      <div class="panel">
+        <div class="panel-label">Original <span class="badge badge-orig">low res</span></div>
+        <img id="imgOrig" src="" alt="Original">
+        <a class="dl-btn" id="dlOrig" download="original.png">download original</a>
+      </div>
+      <div class="panel">
+        <div class="panel-label">Bicubic <span class="badge badge-bicubic">standard</span></div>
+        <img id="imgBicubic" src="" alt="Bicubic">
+        <a class="dl-btn" id="dlBicubic" download="bicubic.png">download bicubic</a>
+      </div>
+      <div class="panel">
+        <div class="panel-label">AI Enhanced <span class="badge badge-ai">super res</span></div>
+        <img id="imgSR" src="" alt="Super Resolution">
+        <a class="dl-btn" id="dlSR" download="super_resolution.png">download AI result</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const dropContent = document.getElementById('dropContent');
+  const generateBtn = document.getElementById('generateBtn');
+  const btnText = document.getElementById('btnText');
+  const spinner = document.getElementById('spinner');
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+
+  let selectedFile = null;
+
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    const url = URL.createObjectURL(file);
+    dropContent.innerHTML = `
+      <img src="${url}" class="preview-img" alt="preview">
+      <p class="file-name">${file.name}</p>
+    `;
+    generateBtn.disabled = false;
+    btnText.textContent = 'Generate Super Resolution';
+    status.textContent = '';
+    results.style.display = 'none';
+  }
+
+  generateBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    generateBtn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Processing...';
+    status.className = 'status';
+    status.textContent = 'Running AI model — this may take 10–30 seconds...';
+    results.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+    formData.append('model', document.getElementById('modelSelect').value);
+    formData.append('scale', document.getElementById('scaleSelect').value);
+
+    try {
+      const res = await fetch('/enhance', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.error) {
+        status.className = 'status error';
+        status.textContent = 'Error: ' + data.error;
+      } else {
+        document.getElementById('imgOrig').src    = 'data:image/png;base64,' + data.original;
+        document.getElementById('imgBicubic').src = 'data:image/png;base64,' + data.bicubic;
+        document.getElementById('imgSR').src       = 'data:image/png;base64,' + data.sr_result;
+        document.getElementById('dlOrig').href    = 'data:image/png;base64,' + data.original;
+        document.getElementById('dlBicubic').href = 'data:image/png;base64,' + data.bicubic;
+        document.getElementById('dlSR').href       = 'data:image/png;base64,' + data.sr_result;
+        document.getElementById('sizeTag').textContent = data.orig_size + ' → ' + data.out_size;
+        results.style.display = 'block';
+        status.className = 'status ok';
+        status.textContent = 'Done! Scroll down to see results.';
+      }
+    } catch (err) {
+      status.className = 'status error';
+      status.textContent = 'Could not connect to the server. Is app.py running?';
+    }
+
+    generateBtn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = 'Generate Again';
+  });
+</script>
+</body>
+</html>
